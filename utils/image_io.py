@@ -1,8 +1,12 @@
 import glob
+import os
+os.environ["MPLBACKEND"] = "Agg"
+import matplotlib
+matplotlib.use("Agg")
+
 
 import torch
 import torchvision
-import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image
