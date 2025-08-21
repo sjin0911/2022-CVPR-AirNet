@@ -20,11 +20,24 @@ if __name__ == '__main__':
     finetuneloader = DataLoader(finetuneset, batch_size=opt.batch_size, pin_memory=True, shuffle=True,
                              drop_last=True, num_workers=opt.num_workers)
 
+    if opt.mode == 0:
+        opt.batch_size = 3
+        ckpt_path = opt.ckpt_path + 'Denoise.pth'
+    elif opt.mode == 1:
+        opt.batch_size = 1
+        ckpt_path = opt.ckpt_path + 'Derain.pth'
+    elif opt.mode == 2:
+        opt.batch_size = 1
+        ckpt_path = opt.ckpt_path + 'Dehaze.pth'
+    elif opt.mode == 3:
+        opt.batch_size = 5
+        ckpt_path = opt.ckpt_path + 'All.pth'
+
     # Network Construction
+    torch.cuda.set_device(opt.cuda)
     net = AirNet(opt).cuda()
-    ckpt = torch.load("ckpt/airnet_allinone.pth", map_location="cpu")
-    net.load_state_dict(ckpt, strict=False)
-    net.train()
+    net.eval()
+    net.load_state_dict(torch.load(ckpt_path, map_location=torch.device(opt.cuda)))
 
     # Optimizer and Loss
     optimizer = optim.Adam(net.parameters(), lr=opt.lr)
