@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from utils.dataset_utils import TrainDataset
+from utils.finetune_dataset_utils import RestoreFinetuneDataset
 from net.model import AirNet
 
 from option_finetune import options as opt
@@ -16,9 +16,13 @@ if __name__ == '__main__':
     torch.cuda.set_device(opt.cuda)
     subprocess.check_output(['mkdir', '-p', opt.ckpt_path])
 
-    finetuneset = TrainDataset(opt)
-    finetuneloader = DataLoader(finetuneset, batch_size=opt.batch_size, pin_memory=True, shuffle=True,
-                             drop_last=True, num_workers=opt.num_workers)
+    finetuneset = RestoreFinetuneDataset(opt)
+    finetuneloader = DataLoader(
+        root="DATA_ROOT",
+        tasks = ["rain", "fog", "dust"],
+        split="train",
+        transform_train=None
+    )
 
     if opt.mode == 0:
         opt.batch_size = 3
