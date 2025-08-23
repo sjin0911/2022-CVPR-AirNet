@@ -5,14 +5,27 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset
 
-def default_id_from_name(name: str):
-    # 예: input: IMG123_01.png → "IMG123", gt: IMG123.png → "IMG123"
+def id_from_name_gt_rule(name: str):
+    """
+    파일 이름에서 GT 매칭용 ID 추출.
+    - GT: D-210725_O9125FGT_002_0001.jpg
+    - 여기서 'FGT_' 뒤의 세자리(002)를 반환
+    """
     stem = Path(name).stem
-    return stem.split('_')[0]
+    if "FGT_" in stem:
+        # GT 파일
+        return stem.split("FGT_")[1][:3]   # '002'
+    else:
+        # Input 파일도 같은 자리에서 id를 뽑을 수 있다고 가정
+        parts = stem.split('_')
+        if len(parts) >= 2:
+            return parts[-2]  # 예: ..._002_0005 → '002'
+        else:
+            raise ValueError(f"이름 규칙 확인 필요: {name}")
 
 class RestoreFinetuneDataset(Dataset):
     def __init__(self, root, tasks=("rain",), split="train",
-                 id_from_name=default_id_from_name,
+                 id_from_name=id_from_name_gt_rule,
                  transform_train=None, transform_eval=None,
                  mode="train"):  # "train" or "eval"
         self.root = Path(root)
@@ -54,11 +67,14 @@ class RestoreFinetuneDataset(Dataset):
         y = Image.open(gt_path).convert("RGB")
 
         if self.mode == "train" and self.t_train:
-            x, y = self.t_train(x, y)
+            x1_pil, x2_pil, y1_pil = self.t_train(x, y)
+            x1 = self._to_tensor(x1_pil)
+            x2 = self._to_tensor(x2_pil)
+            y1 = self._to_tensor(y1_pil)
+            meta = {...}
+            return (x1, x2), y1, meta
         elif self.mode != "train" and self.t_eval:
-            x, y = self.t_eval(x, y)
-
-        x = self._to_tensor(x)
-        y = self._to_tensor(y)
-        meta = {"task": task, "id": iid, "in_path": in_path, "gt_path": gt_path}
-        return x, y, meta
+            # eval: full image
+            x = self._to_tensor(x)
+            y = self._to_tensor(y)
+            return x, y, meta

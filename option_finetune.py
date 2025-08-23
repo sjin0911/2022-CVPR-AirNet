@@ -13,9 +13,9 @@ parser.add_argument('--epochs', type=int, default=100, help='number of finetune 
 parser.add_argument('--lr', type=float, default=1e-4, help='learning rate for finetuning')
 
 # Data
-parser.add_argument('--de_type', type=list, default=['denoise_15', 'denoise_25', 'denoise_50', 'derain', 'dehaze'],
+parser.add_argument('--de_type', type=list, default=['derain', 'dehaze', 'dust'],
                     help='degradation types for finetuning')
-parser.add_argument('--patch_size', type=int, default=128, help='patch size of input')
+parser.add_argument('--patch_size', type=int, default=256, help='patch size of input')
 parser.add_argument('--encoder_dim', type=int, default=256, help='dimensionality of encoder')
 parser.add_argument('--num_workers', type=int, default=0, help='number of workers')
 
