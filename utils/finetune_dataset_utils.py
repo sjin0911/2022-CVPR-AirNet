@@ -58,19 +58,23 @@ class RestoreFinetuneDataset(Dataset):
             in_dir = self.root / task / split / "input"
 
             # key -> GT path
-            gt_map = {extract_key(g): g for g in gt_files}
+            gt_map = {}
+            for gname in gt_files:
+                mid = id_from_name_gt_rule(gname)
+                gt_map[mid] = gname  # 같은 mid면 마지막 GT 하나로 매칭
 
+            # input 파일도 mid 추출해서 GT와 매칭
             for iname in in_files:
                 try:
-                    key = extract_key(iname)
+                    mid = id_from_name_gt_rule(iname)
                 except ValueError:
                     continue
-                if key in gt_map:
-                    gp = gt_dir / gt_map[key]
+                if mid in gt_map:
+                    gp = gt_dir / gt_map[mid]
                     ip = in_dir / iname
                     if gp.exists() and ip.exists():
-                        self.samples.append((str(ip), str(gp), task, key))
-
+                        self.samples.append((str(ip), str(gp), task, mid))
+                        
         if len(self.samples) == 0:
             raise RuntimeError(
                 f"No samples from txt under {self.root} with tasks={self.tasks}, split={self.split}"
