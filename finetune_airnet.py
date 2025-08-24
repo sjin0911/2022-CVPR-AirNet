@@ -49,7 +49,7 @@ if __name__ == '__main__':
     wandb.init(
         project="airnet-finetune",
         name="run1",
-        entity = "imsarahyoon",
+        entity = "sjin0911yoon",
         config={
             "lr": opt.lr,
             "batch_size": 5,
