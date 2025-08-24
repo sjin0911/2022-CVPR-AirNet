@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from PIL import Image
-import wandb  # ✅ NEW
+import wandb 
 
 from utils.finetune_dataset_utils import RestoreFinetuneDataset
 from net.model import AirNet
@@ -47,8 +47,9 @@ def to_wandb_image(tensor, caption=None):
 if __name__ == '__main__':
     # ------------------ WandB init ------------------
     wandb.init(
-        project=getattr(opt, "wandb_project", "airnet-finetune"),
-        name=getattr(opt, "wandb_run_name", None),
+        project="airnet-finetune",
+        name="run1",
+        entity = "imsarahyoon",
         config={
             "lr": opt.lr,
             "batch_size": 5,
@@ -65,7 +66,7 @@ if __name__ == '__main__':
     # ------------------ Dataset / Loader ------------------
     train_tf = two_crops_transform(patch=getattr(opt, "patch_size", 256))
     finetuneset = RestoreFinetuneDataset(
-        root="DATA_ROOT",  # TODO: 실제 데이터 루트로 교체
+        root="/content/drive/MyDrive/miniproject1/AirNet/Data/fulldata",  # TODO: 실제 데이터 루트로 교체
         tasks=["rain", "fog", "dust"],
         split="train",
         transform_train=train_tf,
@@ -75,7 +76,7 @@ if __name__ == '__main__':
         finetuneset,
         batch_size=5,
         shuffle=True,
-        num_workers=2,           # ✅ 오타 수정
+        num_workers=2,           
         pin_memory=True,
         persistent_workers=True,
     )

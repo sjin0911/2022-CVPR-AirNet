@@ -17,6 +17,10 @@ def id_from_name_gt_rule(name: str) -> str:
 
 IMG_EXT = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
 
+def load_list(txt_path):
+    with open(txt_path, "r") as f:
+        return [ln.strip() for ln in f if ln.strip()]
+
 class RestoreFinetuneDataset(Dataset):
     def __init__(self, root, tasks=("rain",), split="train",
                  id_from_name=id_from_name_gt_rule,
@@ -31,35 +35,27 @@ class RestoreFinetuneDataset(Dataset):
         self.t_eval  = transform_eval
 
         self.samples = []  # (in_path, gt_path, task, id)
+
         for task in self.tasks:
+            # txt 파일 경로 추정
+            gt_txt = self.root / f"GT_{task}_{split}.txt"
+            if not gt_txt.exists():
+                raise FileNotFoundError(f"{gt_txt} not found!")
+
+            gt_files = load_list(gt_txt)
+            # txt에 기록된 파일명 → 실제 경로 구성
             in_dir = self.root / task / split / "input"
             gt_dir = self.root / task / split / "gt"
-            if not in_dir.is_dir() or not gt_dir.is_dir():
-                continue
 
-            # GT 인덱스: id -> gt_path
-            gt_map = {}
-            for gp in sorted(glob.glob(str(gt_dir / "*"))):
-                if Path(gp).suffix.lower() not in IMG_EXT:
-                    continue
-                gid = self.id_from_name(os.path.basename(gp))
-                # 중복 감지(선택): 나중에 덮어씌워짐
-                if gid in gt_map:
-                    # print(f"[warn] duplicate GT id {gid} under {gt_dir}")
-                    pass
-                gt_map[gid] = gp
-
-            # 입력과 매칭
-            for ip in sorted(glob.glob(str(in_dir / "*"))):
-                if Path(ip).suffix.lower() not in IMG_EXT:
-                    continue
-                iid = self.id_from_name(os.path.basename(ip))
-                gp = gt_map.get(iid)
-                if gp is not None:
-                    self.samples.append((ip, gp, task, iid))
+            for fname in gt_files:
+                gp = gt_dir / fname
+                ip = in_dir / fname.replace("GT_", "")  # 규칙: GT 없는 파일명이 input
+                if gp.exists() and ip.exists():
+                    iid = self.id_from_name(fname)
+                    self.samples.append((str(ip), str(gp), task, iid))
 
         if len(self.samples) == 0:
-            raise RuntimeError(f"No samples found under {self.root} with tasks={self.tasks}, split={self.split}")
+            raise RuntimeError(f"No samples from txt under {self.root} with tasks={self.tasks}, split={self.split}")
 
     def __len__(self):
         return len(self.samples)
