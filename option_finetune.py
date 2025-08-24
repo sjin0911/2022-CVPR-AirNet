@@ -27,6 +27,7 @@ parser.add_argument('--denoise_dir', type=str, default='data/FineTune/Denoise/',
 parser.add_argument('--output_path', type=str, default="output_finetune/", help='output save path')
 parser.add_argument('--ckpt_path', type=str, default="ckpt/", help='checkpoint save path')
 
-parser.add_argument('--batch_size', type=int, default=5, help='batch size')
+
+options = parser.parse_args()
 
 
