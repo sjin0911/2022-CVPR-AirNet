@@ -21,8 +21,21 @@ def load_list(txt_path):
     with open(txt_path, "r") as f:
         return [ln.strip() for ln in f if ln.strip()]
 
+import re
+
+def extract_key(fname: str):
+    """
+    파일명에서 '..._NNN_####.jpg' 패턴 중 NNN까지만 추출
+    예: D-210801_O8103R01_003_0005.jpg -> "D-210801_O8103R01_003"
+    """
+    stem = Path(fname).stem
+    m = re.match(r"(.+_\d{3})_\d{4}$", stem)
+    if not m:
+        raise ValueError(f"Unexpected filename pattern: {fname}")
+    return m.group(1)
+
 class RestoreFinetuneDataset(Dataset):
-    def __init__(self, root, tasks="rain", split="train",
+    def __init__(self, root, tasks=("rain",), split="train",
                  transform_train=None, transform_eval=None,
                  mode="train"):
         self.root = Path(root)
@@ -32,8 +45,9 @@ class RestoreFinetuneDataset(Dataset):
         self.t_train = transform_train
         self.t_eval  = transform_eval
 
+        self.samples = []
+
         for task in self.tasks: 
-        # GT/NotGT 리스트 파일 경로
             gt_txt = self.root / f"GT_{task}_{split}.txt"
             notgt_txt = self.root / f"notGT_{task}_{split}.txt"
 
@@ -43,19 +57,24 @@ class RestoreFinetuneDataset(Dataset):
             gt_dir = self.root / task / split / "gt"
             in_dir = self.root / task / split / "input"
 
-            # 매칭: 같은 이름이 있으면 pair로 추가
-            self.samples = []
-            for gname in gt_files:
-                prefix = gname.replace("GT_", "")  # GT 제거 → input 이름
-                matches = [iname for iname in in_files if prefix in iname]
-                for iname in matches:
-                    gp = gt_dir / gname
+            # key -> GT path
+            gt_map = {extract_key(g): g for g in gt_files}
+
+            for iname in in_files:
+                try:
+                    key = extract_key(iname)
+                except ValueError:
+                    continue
+                if key in gt_map:
+                    gp = gt_dir / gt_map[key]
                     ip = in_dir / iname
                     if gp.exists() and ip.exists():
-                        self.samples.append((str(ip), str(gp), task, prefix))
+                        self.samples.append((str(ip), str(gp), task, key))
 
         if len(self.samples) == 0:
-            raise RuntimeError(f"No samples from txt under {self.root} with task={self.task}, split={self.split}")
+            raise RuntimeError(
+                f"No samples from txt under {self.root} with tasks={self.tasks}, split={self.split}"
+            )
 
     def __len__(self):
         return len(self.samples)
