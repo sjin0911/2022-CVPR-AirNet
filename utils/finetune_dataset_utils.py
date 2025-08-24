@@ -22,40 +22,39 @@ def load_list(txt_path):
         return [ln.strip() for ln in f if ln.strip()]
 
 class RestoreFinetuneDataset(Dataset):
-    def __init__(self, root, tasks=("rain",), split="train",
-                 id_from_name=id_from_name_gt_rule,
+    def __init__(self, root, task="rain", split="train",
                  transform_train=None, transform_eval=None,
                  mode="train"):
         self.root = Path(root)
-        self.tasks = list(tasks) if isinstance(tasks, (list, tuple)) else [tasks]
+        self.task = task
         self.split = split
-        self.id_from_name = id_from_name
         self.mode = mode
         self.t_train = transform_train
         self.t_eval  = transform_eval
 
-        self.samples = []  # (in_path, gt_path, task, id)
+        # GT/NotGT 리스트 파일 경로
+        gt_txt = self.root / f"GT_{task}_{split}.txt"
+        notgt_txt = self.root / f"notGT_{task}_{split}.txt"
 
-        for task in self.tasks:
-            # txt 파일 경로 추정
-            gt_txt = self.root / f"GT_{task}_{split}.txt"
-            if not gt_txt.exists():
-                raise FileNotFoundError(f"{gt_txt} not found!")
+        gt_files = load_list(gt_txt)
+        in_files = load_list(notgt_txt)
 
-            gt_files = load_list(gt_txt)
-            # txt에 기록된 파일명 → 실제 경로 구성
-            in_dir = self.root / task / split / "input"
-            gt_dir = self.root / task / split / "gt"
+        gt_dir = self.root / task / split / "gt"
+        in_dir = self.root / task / split / "input"
 
-            for fname in gt_files:
-                gp = gt_dir / fname
-                ip = in_dir / fname.replace("GT_", "")  # 규칙: GT 없는 파일명이 input
+        # 매칭: 같은 이름이 있으면 pair로 추가
+        self.samples = []
+        for gname in gt_files:
+            prefix = gname.replace("GT_", "")  # GT 제거 → input 이름
+            matches = [iname for iname in in_files if prefix in iname]
+            for iname in matches:
+                gp = gt_dir / gname
+                ip = in_dir / iname
                 if gp.exists() and ip.exists():
-                    iid = self.id_from_name(fname)
-                    self.samples.append((str(ip), str(gp), task, iid))
+                    self.samples.append((str(ip), str(gp), task, prefix))
 
         if len(self.samples) == 0:
-            raise RuntimeError(f"No samples from txt under {self.root} with tasks={self.tasks}, split={self.split}")
+            raise RuntimeError(f"No samples from txt under {self.root} with task={self.task}, split={self.split}")
 
     def __len__(self):
         return len(self.samples)
