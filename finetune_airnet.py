@@ -65,21 +65,34 @@ if __name__ == '__main__':
 
     # ------------------ Dataset / Loader ------------------
     train_tf = two_crops_transform(patch=getattr(opt, "patch_size", 256))
-    finetuneset = RestoreFinetuneDataset(
-        root="/content/drive/MyDrive/miniproject1/AirNet/Data/fulldata",  # TODO: 실제 데이터 루트로 교체
+    root =  "/content/drive/MyDrive/miniproject1/AirNet/Data/fulldata"
+
+    trainset = RestoreFinetuneDataset(
+        root=root,  # TODO: 실제 데이터 루트로 교체
         tasks=["rain", "fog", "dust"],
         split="train",
         transform_train=train_tf,
         mode="train",
     )
-    finetuneloader = DataLoader(
-        finetuneset,
-        batch_size=5,
-        shuffle=True,
-        num_workers=2,           
-        pin_memory=True,
-        persistent_workers=True,
+    valset = RestoreFinetuneDataset(
+        root=root,
+        tasks=["rain","fog","dust"],
+        split="val",
+        mode="eval"
     )
+
+    # test dataset
+    testset = RestoreFinetuneDataset(
+        root=root,
+        tasks=["rain","fog","dust"],
+        split="test",
+        mode="eval"
+    )
+    
+    train_loader = DataLoader(trainset, batch_size=5, shuffle=True, num_workers=2)
+    val_loader   = DataLoader(valset,   batch_size=5, shuffle=False, num_workers=2)
+    test_loader  = DataLoader(testset,  batch_size=5, shuffle=False, num_workers=2)
+
 
     # ------------------ Model / Opt / Loss ------------------
     net = AirNet(opt).cuda()
@@ -101,59 +114,48 @@ if __name__ == '__main__':
     best_loss = float("inf")
 
     for epoch in range(opt.epochs):
+        # ---------------- Train ----------------
         net.train()
         running_loss = 0.0
+        for step, ((x_q, x_k), y, meta) in enumerate(tqdm(train_loader)):
+            ...
+            # (지금 작성한 학습 코드 그대로)
 
-        for step, ((x_q, x_k), y, meta) in enumerate(tqdm(finetuneloader)):
-            x_q = x_q.cuda(non_blocking=True)
-            x_k = x_k.cuda(non_blocking=True)
-            y   = y.cuda(non_blocking=True)
+        avg_loss = running_loss / len(train_loader)
+        wandb.log({"epoch": epoch + 1, "train/loss": avg_loss})
 
-            optimizer.zero_grad(set_to_none=True)
-
-            with torch.cuda.amp.autocast():
-                restored, output, target = net(x_query=x_q, x_key=x_k)
-                contrast_loss = CE(output, target)
+        # ---------------- Validation ----------------
+        net.eval()
+        val_loss = 0.0
+        with torch.no_grad():
+            for (x, y, meta) in val_loader:
+                x = x.cuda(non_blocking=True)
+                y = y.cuda(non_blocking=True)
+                restored, output, target = net(x_query=x, x_key=x)  # eval 모드 forward
                 l1_loss = l1(restored, y)
-                loss = l1_loss + 0.1 * contrast_loss
+                val_loss += l1_loss.item()
+        val_loss /= len(val_loader)
 
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+        print(f"[Epoch {epoch+1}] Train {avg_loss:.4f} | Val {val_loss:.4f}")
+        wandb.log({"epoch": epoch + 1, "val/loss": val_loss})
 
-            running_loss += loss.item()
+        # best 모델 저장은 validation loss 기준으로!
+        if val_loss < best_loss:
+            best_loss = val_loss
+            torch.save(net.state_dict(), os.path.join(opt.ckpt_path, "best.pth"))
+            wandb.run.summary["best_val_loss"] = best_loss
 
-            # ---- step-wise log (간단 메트릭) ----
-            if (step + 1) % 50 == 0 or (step == 0):
-                # 샘플 이미지 로그 (부하 방지: 가끔만)
-                log_imgs = {}
-                try:
-                    log_imgs["restored"] = to_wandb_image(restored)
-                    log_imgs["target"]   = to_wandb_image(y)
-                    log_imgs["query"]    = to_wandb_image(x_q)
-                except Exception:
-                    pass
+    net.eval()
+    test_loss = 0.0
+    with torch.no_grad():
+        for (x, y, meta) in test_loader:
+            x = x.cuda(non_blocking=True)
+            y = y.cuda(non_blocking=True)
+            restored, output, target = net(x_query=x, x_key=x)
+            l1_loss = l1(restored, y)
+            test_loss += l1_loss.item()
+    test_loss /= len(test_loader)
 
-                wandb.log({
-                    "step": step + epoch * len(finetuneloader),
-                    "train/loss": loss.item(),
-                    "train/l1_loss": l1_loss.item(),
-                    "train/contrast_loss": contrast_loss.item(),
-                    "train/lr": optimizer.param_groups[0]["lr"],
-                    **({k: v for k, v in log_imgs.items()} if log_imgs else {})
-                })
+    print(f"Final Test Loss: {test_loss:.4f}")
+    wandb.log({"test/loss": test_loss})
 
-        avg_loss = running_loss / len(finetuneloader)
-        print(f"[Epoch {epoch+1}] Train Loss: {avg_loss:.4f}")
-        wandb.log({"epoch": epoch + 1, "epoch/train_loss": avg_loss})
-
-        if avg_loss < best_loss:
-            best_loss = avg_loss
-            best_path = os.path.join(opt.ckpt_path, "best.pth")
-            torch.save(net.state_dict(), best_path)
-            print(f"  -> New best model saved! (loss {best_loss:.4f})")
-            wandb.run.summary["best_loss"] = best_loss
-            wandb.run.summary["best_ckpt"] = best_path
-
-    print("Done.")
-    wandb.finish()
