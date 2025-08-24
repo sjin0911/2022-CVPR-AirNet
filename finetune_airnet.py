@@ -45,6 +45,8 @@ def to_wandb_image(tensor, caption=None):
     return wandb.Image(arr, caption=caption)
 
 if __name__ == '__main__':
+    opt.encoder_dim = 1280
+
     # ------------------ WandB init ------------------
     wandb.init(
         project="airnet-finetune",
