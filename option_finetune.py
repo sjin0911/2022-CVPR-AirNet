@@ -29,6 +29,6 @@ parser.add_argument('--ckpt_path', type=str, default="ckpt/", help='checkpoint s
 
 
 options = parser.parse_args()
-options.batch_size = 5
+options.batch_size = 16
 
 

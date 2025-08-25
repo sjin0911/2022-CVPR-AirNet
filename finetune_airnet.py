@@ -91,9 +91,9 @@ if __name__ == '__main__':
         mode="eval"
     )
     
-    train_loader = DataLoader(trainset, batch_size=5, shuffle=True, num_workers=2)
-    val_loader   = DataLoader(valset,   batch_size=5, shuffle=False, num_workers=2)
-    test_loader  = DataLoader(testset,  batch_size=5, shuffle=False, num_workers=2)
+    train_loader = DataLoader(trainset, batch_size=5, shuffle=True, num_workers=0)
+    val_loader   = DataLoader(valset,   batch_size=5, shuffle=False, num_workers=0)
+    test_loader  = DataLoader(testset,  batch_size=5, shuffle=False, num_workers=0)
 
 
     # ------------------ Model / Opt / Loss ------------------

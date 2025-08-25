@@ -53,7 +53,7 @@ class CBDE(nn.Module):
         dim = 256
 
         # Encoder
-        self.E = MoCo(base_encoder=ResEncoder, dim=dim, K=opt.batch_size * dim)
+        self.E = MoCo(base_encoder=ResEncoder, dim=dim, K=1280)
 
     def forward(self, x_query, x_key):
         if self.training:
