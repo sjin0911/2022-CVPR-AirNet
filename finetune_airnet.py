@@ -61,7 +61,7 @@ if __name__ == '__main__':
         }
     )
     tasks=["rain", "fog", "dust"]
-    base_dir="/content/local_data/fulldata"
+    base_dir="/content/local_data"
 
 
     torch.cuda.set_device(opt.cuda)
@@ -69,7 +69,7 @@ if __name__ == '__main__':
 
     # ------------------ Dataset / Loader ------------------
     train_tf = two_crops_transform(patch=getattr(opt, "patch_size", 256))
-    root =  "/content/local_data/fulldata"
+    root =  "/content/local_data"
 
     trainset = RestoreFinetuneDataset(
         root=root,  # TODO: 실제 데이터 루트로 교체
@@ -108,7 +108,11 @@ if __name__ == '__main__':
     CE = nn.CrossEntropyLoss().cuda()
     l1 = nn.L1Loss().cuda()
 
-    scaler = torch.cuda.amp.GradScaler()
+    
+    scaler = torch.cuda.amp.GradScaler(enabled=True)  # 안 만들어져 있으면 한 줄 추가
+
+    amp_dtype = torch.float16  # L4면 bf16도 가능: torch.bfloat16
+    amp_ctx = torch.cuda.amp.autocast(dtype=amp_dtype)
 
     # (선택) 그래프/그라드 감시
     wandb.watch(net, log="all", log_freq=100)
@@ -117,27 +121,39 @@ if __name__ == '__main__':
     print('Start finetuning...')
     best_loss = float("inf")
 
+    
     for epoch in range(opt.epochs):
-        # ---------------- Train ----------------
         net.train()
         running_loss = 0.0
-        for step, (x, y) in enumerate(tqdm(train_loader)):
-            x, y = x.cuda(non_blocking=True), y.cuda(non_blocking=True)
+
+        for step, batch in enumerate(tqdm(train_loader, total=len(train_loader))):
+            # batch 언패킹: ((x1,x2), y, meta) 또는 (x, y, meta)
+            if isinstance(batch[0], (list, tuple)):
+                x = batch[0][0]   # 첫 번째 crop만 사용
+            else:
+                x = batch[0]
+            y = batch[1]
+            # meta = batch[2]  # 필요하면 사용
+
+            x = x.cuda(non_blocking=True)
+            y = y.cuda(non_blocking=True)
 
             optimizer.zero_grad(set_to_none=True)
-            with torch.cuda.amp.autocast(dtype=torch.float16):
+            with amp_ctx:
                 pred = net(x)
-                loss = l1(pred, y)  # 예시: L1 loss
+                loss = l1(pred, y)
+
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
 
             running_loss += loss.item()
 
-        avg_loss = running_loss / len(train_loader)
+        avg_loss = running_loss / max(1, len(train_loader))
         wandb.log({"epoch": epoch + 1, "train/loss": avg_loss})
 
-        # 🔹 모든 epoch 저장
+        # 체크포인트 저장
+        os.makedirs(opt.ckpt_path, exist_ok=True)
         ckpt_epoch = os.path.join(opt.ckpt_path, f"epoch_{epoch+1}.pth")
         torch.save(net.state_dict(), ckpt_epoch)
 
@@ -146,7 +162,7 @@ if __name__ == '__main__':
             ckpt_best = os.path.join(opt.ckpt_path, "best.pth")
             torch.save(net.state_dict(), ckpt_best)
 
+    # 마지막 저장 + 요약
     ckpt_final = os.path.join(opt.ckpt_path, "last.pth")
     torch.save(net.state_dict(), ckpt_final)
-
     wandb.run.summary["best_train_loss"] = best_loss
