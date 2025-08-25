@@ -29,16 +29,29 @@ def create_lmdb(input_dir, gt_dir, lmdb_path, write_frequency=5000):
 
     input_files = sorted(glob.glob(os.path.join(input_dir, "*.jpg")))
     gt_files    = sorted(glob.glob(os.path.join(gt_dir, "*.jpg")))
-    assert len(input_files) == len(gt_files), "input/gt 개수가 다름"
 
-    map_size = 1 << 40  # 1TB까지 허용 (100GB 데이터 안전하게 커버)
+    # GT 맵: 가운데 3자리 숫자 추출해서 key로 저장
+    def get_mid3(fname):
+        base = os.path.basename(fname)
+        parts = base.split("_")
+        return parts[-2]  
+
+    gt_map = {get_mid3(f): f for f in gt_files}
+
+    map_size = 1 << 40
     env = lmdb.open(lmdb_path, map_size=map_size)
-
     txn = env.begin(write=True)
     keys = []
 
-    for idx, (inp, gt) in enumerate(zip(input_files, gt_files)):
-        inp_img = read_image(inp).numpy()   # (C,H,W) numpy
+    for idx, inp in enumerate(input_files):
+        mid3 = get_mid3(inp)
+        if mid3 not in gt_map:
+            # GT가 없는 경우 skip
+            continue
+
+        gt = gt_map[mid3]
+
+        inp_img = read_image(inp).numpy()
         gt_img  = read_image(gt).numpy()
         k = f"{idx:08}".encode("ascii")
 
