@@ -54,6 +54,9 @@ class RestoreFinetuneDataset(Dataset):
             gt_files = load_list(gt_txt)
             in_files = load_list(notgt_txt)
 
+            half = len(in_files)//2
+            in_files = in_files[:half]
+
             gt_dir = self.root / task / split / "gt"
             in_dir = self.root / task / split / "input"
 
@@ -74,7 +77,7 @@ class RestoreFinetuneDataset(Dataset):
                     ip = in_dir / iname
                     if gp.exists() and ip.exists():
                         self.samples.append((str(ip), str(gp), task, mid))
-                        
+
         if len(self.samples) == 0:
             raise RuntimeError(
                 f"No samples from txt under {self.root} with tasks={self.tasks}, split={self.split}"
