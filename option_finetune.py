@@ -10,6 +10,7 @@ parser.add_argument('--mode', type=int, default=3,
 
 # Training
 parser.add_argument('--epochs', type=int, default=100, help='number of finetune epochs')
+parser.add_argument('--epochs_encoder', type=int, default=100, help='number of epochs to train encoder.')
 parser.add_argument('--lr', type=float, default=1e-4, help='learning rate for finetuning')
 
 # Data

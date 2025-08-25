@@ -166,6 +166,11 @@ if __name__ == '__main__':
         avg_loss = running_loss / max(1, len(train_loader))
         wandb.log({"epoch": epoch + 1, "train/loss": avg_loss})
 
+        if epoch < opt.epochs_encoder:
+            print(f"Epoch {epoch} | contrast_loss: {loss.item():.4f}")
+        else:
+            print(f"Epoch {epoch} | total_loss: {loss.item():.4f}")
+
         # 체크포인트 저장
         os.makedirs(opt.ckpt_path, exist_ok=True)
         ckpt_epoch = os.path.join(opt.ckpt_path, f"epoch_{epoch+1}.pth")
