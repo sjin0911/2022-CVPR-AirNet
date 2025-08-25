@@ -126,21 +126,36 @@ if __name__ == '__main__':
         running_loss = 0.0
 
         for step, batch in enumerate(tqdm(train_loader, total=len(train_loader))):
-            # batch 언패킹: ((x1,x2), y, meta) 또는 (x, y, meta)
-            if isinstance(batch[0], (list, tuple)):
-                x = batch[0][0]   # 첫 번째 crop만 사용
-            else:
-                x = batch[0]
-            y = batch[1]
-            # meta = batch[2]  # 필요하면 사용
+            if isinstance(batch[0], (list, tuple)):   # train 모드: ((x1,x2), y, meta)
+                x1, x2 = batch[0]
+                y      = batch[1]
+                meta   = batch[2]
+            else:                                     # eval 모드: (x, y, meta)
+                x1     = batch[0]
+                x2     = x1
+                y      = batch[1]
+                meta   = batch[2]
 
-            x = x.cuda(non_blocking=True)
-            y = y.cuda(non_blocking=True)
+            x1 = x1.cuda(non_blocking=True)
+            x2 = x2.cuda(non_blocking=True)
+            y  = y.cuda(non_blocking=True)
 
             optimizer.zero_grad(set_to_none=True)
-            with amp_ctx:
-                pred = net(x)
-                loss = l1(pred, y)
+
+            # -----------------------------
+            # forward + loss
+            # -----------------------------
+            if epoch < opt.epochs_encoder:
+                # encoder pre-train
+                _, output, target, _ = net.E(x_query=x1, x_key=x2)
+                loss = CE(output, target)
+
+            else:
+                # restoration + contrastive
+                restored, output, target = net(x_query=x1, x_key=x2)
+                contrast_loss = CE(output, target)
+                l1_loss = l1(restored, y)
+                loss = l1_loss + 0.1 * contrast_loss
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
@@ -150,6 +165,11 @@ if __name__ == '__main__':
 
         avg_loss = running_loss / max(1, len(train_loader))
         wandb.log({"epoch": epoch + 1, "train/loss": avg_loss})
+
+        if epoch < opt.epochs_encoder:
+            print(f"Epoch {epoch} | contrast_loss: {loss.item():.4f}")
+        else:
+            print(f"Epoch {epoch} | total_loss: {loss.item():.4f}")
 
         # 체크포인트 저장
         os.makedirs(opt.ckpt_path, exist_ok=True)
