@@ -111,8 +111,7 @@ if __name__ == '__main__':
     
     scaler = torch.cuda.amp.GradScaler(enabled=True)  # 안 만들어져 있으면 한 줄 추가
 
-    amp_dtype = torch.float16  # L4면 bf16도 가능: torch.bfloat16
-    amp_ctx = torch.cuda.amp.autocast(dtype=amp_dtype)
+    amp_ctx = torch.cuda.amp.autocast()
 
     # (선택) 그래프/그라드 감시
     wandb.watch(net, log="all", log_freq=100)
