@@ -22,19 +22,32 @@ from torch.utils.data import Dataset, DataLoader
 #####################################
 # 1. LMDB 생성 (처음 한 번만 실행)
 #####################################
-def create_lmdb(input_dir, gt_dir, lmdb_path, write_frequency=5000):
+def create_lmdb(input_dir, gt_dir, lmdb_path, write_frequency=5000,
+                gt_list_path=None, notgt_list_path=None):
     if os.path.exists(lmdb_path):
         print(f"[LMDB] 이미 {lmdb_path} 있음, 생성 스킵")
         return
 
+    def read_list(path):
+        if path is None or not os.path.isfile(path):
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            # 줄 끝 개행/공백 제거, 빈 줄/주석(#) 무시
+            names = [ln.strip() for ln in f if ln.strip() and not ln.lstrip().startswith("#")]
+        # 확장자 포함/미포함 뒤섞여도 비교 쉬우라고 base name만 사용
+        return set(os.path.basename(n) for n in names)
+
+    allow_gt_names = read_list(gt_list_path)           # GT 목록
+    deny_notgt_names = read_list(notgt_list_path)      # notGT 목록 (있으면 제외)
+
     input_files = sorted(glob.glob(os.path.join(input_dir, "*.jpg")))
     gt_files    = sorted(glob.glob(os.path.join(gt_dir, "*.jpg")))
 
-    # GT 맵: 가운데 3자리 숫자 추출해서 key로 저장
+    # GT 맵: 가운데 3자리 숫자 추출해서 key로 저장 (기존 로직 유지)
     def get_mid3(fname):
         base = os.path.basename(fname)
         parts = base.split("_")
-        return parts[-2]  
+        return parts[-2]
 
     gt_map = {get_mid3(f): f for f in gt_files}
 
@@ -44,6 +57,14 @@ def create_lmdb(input_dir, gt_dir, lmdb_path, write_frequency=5000):
     keys = []
 
     for idx, inp in enumerate(input_files):
+        base_inp = os.path.basename(inp)
+
+        # 리스트 기반 필터링 (최소 변경)
+        if allow_gt_names is not None and base_inp not in allow_gt_names:
+            continue
+        if deny_notgt_names is not None and base_inp in deny_notgt_names:
+            continue
+
         mid3 = get_mid3(inp)
         if mid3 not in gt_map:
             # GT가 없는 경우 skip
@@ -58,10 +79,10 @@ def create_lmdb(input_dir, gt_dir, lmdb_path, write_frequency=5000):
         txn.put(k, pickle.dumps((inp_img, gt_img)))
         keys.append(k)
 
-        if (idx+1) % write_frequency == 0:
+        if (len(keys)) % write_frequency == 0:
             txn.commit()
             txn = env.begin(write=True)
-            print(f"[LMDB] {idx+1} / {len(input_files)} 저장 완료")
+            print(f"[LMDB] {len(keys)} 저장 완료")
 
     txn.commit()
     with env.begin(write=True) as txn:
@@ -70,7 +91,6 @@ def create_lmdb(input_dir, gt_dir, lmdb_path, write_frequency=5000):
 
     env.close()
     print(f"[LMDB] 생성 완료: {lmdb_path}, 총 {len(keys)}개 샘플")
-
 
 #####################################
 # 2. LMDB Dataset 정의
