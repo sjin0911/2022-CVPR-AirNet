@@ -53,7 +53,7 @@ if __name__ == '__main__':
         entity = "sjin0911yoon",
         config={
             "lr": opt.lr,
-            "batch_size": 16,
+            "batch_size": 5,
             "epochs": opt.epochs,
             "cuda": opt.cuda,
             "patch_size": getattr(opt, "patch_size", 256),
@@ -93,9 +93,9 @@ if __name__ == '__main__':
         mode="eval"
     )
     
-    train_loader = DataLoader(trainset, batch_size=5, shuffle=True, num_workers=0)
-    val_loader   = DataLoader(valset,   batch_size=5, shuffle=False, num_workers=0)
-    test_loader  = DataLoader(testset,  batch_size=5, shuffle=False, num_workers=0)
+    train_loader = DataLoader(trainset, batch_size=5, shuffle=True, num_workers=2)
+    val_loader   = DataLoader(valset,   batch_size=5, shuffle=False, num_workers=2)
+    test_loader  = DataLoader(testset,  batch_size=5, shuffle=False, num_workers=2)
 
 
     # ------------------ Model / Opt / Loss ------------------

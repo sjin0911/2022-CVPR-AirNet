@@ -55,9 +55,9 @@ if __name__ == '__main__':
     # testloader = DataLoader(test_set, batch_size=1, pin_memory=True, shuffle=False, num_workers=0)
 
     ds = PairMatchTestDataset(
-        input_root = "/content/2022-CVPR-AirNet/test/demo/input",
-        gt_root = "/content/2022-CVPR-AirNet/test/demo/GT",
-        input_list_txt = "/content/2022-CVPR-AirNet/test/demo/input_rain_ens.txt",
+        input_root = "/content/2022-CVPR-AirNet/test/demo/Ensemble/input",
+        gt_root = "/content/2022-CVPR-AirNet/test/demo/Ensemble/GT",
+        input_list_txt = "/content/2022-CVPR-AirNet/test/demo/Ensemble/input_rain_ens.txt",
         base=16
     )
     loader = DataLoader(ds, batch_size=1, shuffle=False, num_workers=0)
@@ -81,11 +81,11 @@ if __name__ == '__main__':
     with torch.no_grad():
         for name, inp, gt in loader:
             inp = inp.cuda()
-            pred = net(inp)  # 네 모델 추론
+            pred = net(x_query = inp, x_key = inp)  # 네 모델 추론
 
             # 저장
             out_img = (pred.clamp(0,1) * 255).round().byte().cpu()[0]
-            torchvision.utils.save_image(pred, f"/content/2022-CVPR-AirNet/test/output/{name[0]}.png")
+            save_image_tensor(pred, opt.output_path + name[0] + '.png')
 
             # metric (GT 있을 때만)
             if gt[0] is not None:
