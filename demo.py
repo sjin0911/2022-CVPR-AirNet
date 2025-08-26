@@ -2,12 +2,15 @@ import argparse
 import subprocess
 from tqdm import tqdm
 import numpy as np
+import math
 
 import torch
 from torch.utils.data import DataLoader
+import torchvision
 
-from utils.dataset_utils import TestSpecificDataset
+from utils.dataset_utils import TestSpecificDataset, PairMatchTestDataset
 from utils.image_io import save_image_tensor
+from pytorch_msssim import ssim
 
 from net.model import AirNet
 
@@ -48,14 +51,47 @@ if __name__ == '__main__':
     net.eval()
     net.load_state_dict(torch.load(ckpt_path, map_location=torch.device(opt.cuda)))
 
-    test_set = TestSpecificDataset(opt)
-    testloader = DataLoader(test_set, batch_size=1, pin_memory=True, shuffle=False, num_workers=0)
+    # test_set = TestSpecificDataset(opt)
+    # testloader = DataLoader(test_set, batch_size=1, pin_memory=True, shuffle=False, num_workers=0)
+
+    ds = PairMatchTestDataset(
+        input_root = "/content/2022-CVPR-AirNet/test/demo/input",
+        gt_root = "/content/2022-CVPR-AirNet/test/demo/GT",
+        input_list_txt = "/content/2022-CVPR-AirNet/test/demo/input_rain_ens.txt",
+        base=16
+    )
+    loader = DataLoader(ds, batch_size=1, shuffle=False, num_workers=0)
+
 
     print('Start testing...')
+    # with torch.no_grad():
+    #     for ([clean_name], degrad_patch) in tqdm(testloader):
+    #         degrad_patch = degrad_patch.cuda()
+
+    #         restored = net(x_query=degrad_patch, x_key=degrad_patch)
+
+    #         save_image_tensor(restored, opt.output_path + clean_name[0] + '.png')
+
+    def psnr(x, y):
+        mse = torch.mean((x - y) ** 2).item()
+        if mse == 0: 
+            return 99.0
+        return 10 * math.log10(1.0 / mse)
+
     with torch.no_grad():
-        for ([clean_name], degrad_patch) in tqdm(testloader):
-            degrad_patch = degrad_patch.cuda()
+        for name, inp, gt in loader:
+            inp = inp.cuda()
+            pred = net(inp)  # 네 모델 추론
 
-            restored = net(x_query=degrad_patch, x_key=degrad_patch)
+            # 저장
+            out_img = (pred.clamp(0,1) * 255).round().byte().cpu()[0]
+            torchvision.utils.save_image(pred, f"/content/2022-CVPR-AirNet/test/output/{name[0]}.png")
 
-            save_image_tensor(restored, opt.output_path + clean_name[0] + '.png')
+            # metric (GT 있을 때만)
+            if gt[0] is not None:
+                gt = gt.cuda()
+                print(
+                    name[0],
+                    "PSNR:", round(psnr(pred, gt), 2),
+                    "SSIM:", round(ssim(pred, gt, data_range=1.0, size_average=True).item(), 4)
+                )

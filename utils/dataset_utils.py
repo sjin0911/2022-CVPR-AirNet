@@ -1,4 +1,4 @@
-import os
+import os, re
 import random
 import copy
 from PIL import Image
@@ -9,6 +9,20 @@ from torchvision.transforms import ToPILImage, Compose, RandomCrop, ToTensor
 
 from utils.image_utils import random_augmentation, crop_img
 from utils.degradation_utils import Degradation
+
+
+MID3_RE = re.compile(r'_(\d{3})_')
+
+def get_mid3(name: str):
+    m = MID3_RE.search(name)
+    if not m:
+        raise ValueError(f"파일명에서 _###_ 패턴을 못 찾았어: {name}")
+    return m.group(1)  # "001" 같은 3자리 문자열
+
+def crop_img(arr: np.ndarray, base=16):
+    h, w = arr.shape[:2]
+    nh, nw = (h // base) * base, (w // base) * base
+    return arr[:nh, :nw]
 
 
 class TrainDataset(Dataset):
@@ -281,3 +295,80 @@ class TestSpecificDataset(Dataset):
 
     def __len__(self):
         return self.num_img
+    
+class PairMatchTestDataset(Dataset):
+    """
+    - input 리스트(txt)로 대상 이미지를 고르고
+    - GT 폴더를 전수 스캔해서 파일명 mid3 키로 매칭
+    - GT가 없으면 None 반환(순수 inference에서도 사용 가능)
+    """
+    def __init__(self, input_root: str, gt_root: str = None,
+                 input_list_txt: str = None, base: int = 16, to_tensor=True):
+        self.input_root = input_root
+        self.gt_root = gt_root
+        self.base = base
+        self.toTensor = ToTensor() if to_tensor else (lambda x: x)
+
+        # 1) input 후보 구성
+        if input_list_txt is not None:
+            with open(input_list_txt, 'r') as f:
+                items = [line.strip() for line in f if line.strip()]
+            # 리스트가 파일명만일 수도, 경로일 수도 있으니 보정
+            self.input_paths = [
+                p if os.path.isabs(p) or os.path.exists(p)
+                else os.path.join(self.input_root, p)
+                for p in items
+            ]
+        else:
+            # txt가 없으면 폴더 전체 사용
+            self.input_paths = [
+                os.path.join(self.input_root, fn)
+                for fn in os.listdir(self.input_root)
+                if not fn.startswith('.') and os.path.isfile(os.path.join(self.input_root, fn))
+            ]
+
+        # 2) GT 인덱스(옵션)
+        self.gt_index = {}
+        if self.gt_root is not None and os.path.isdir(self.gt_root):
+            for fn in os.listdir(self.gt_root):
+                if fn.startswith('.'): 
+                    continue
+                path = os.path.join(self.gt_root, fn)
+                if not os.path.isfile(path): 
+                    continue
+                try:
+                    k = get_mid3(fn)
+                    # 동일 키가 여러 개면 마지막 것으로 덮임 → 필요하면 정책 바꿔도 됨
+                    self.gt_index[k] = path
+                except ValueError:
+                    # 패턴 없으면 스킵
+                    pass
+
+        # 3) input↔GT 매칭 테이블
+        self.pairs = []
+        for ip in self.input_paths:
+            name = os.path.basename(ip)
+            k = get_mid3(name)
+            gt_path = self.gt_index.get(k) if self.gt_index else None
+            self.pairs.append((ip, gt_path))
+
+    def __len__(self):
+        return len(self.pairs)
+
+    def __getitem__(self, idx):
+        ip, gp = self.pairs[idx]
+        name = os.path.basename(ip)[:-4]
+
+        inp_img = np.array(Image.open(ip).convert('RGB'))
+        inp_img = crop_img(inp_img, base=self.base)
+        inp_t = self.toTensor(inp_img)
+
+        if gp is not None and os.path.exists(gp):
+            gt_img = np.array(Image.open(gp).convert('RGB'))
+            gt_img = crop_img(gt_img, base=self.base)
+            gt_t = self.toTensor(gt_img)
+        else:
+            gt_t = None  # GT 없는 순수 테스트용
+
+        # 반환: (이름, input tensor, gt tensor or None)
+        return name, inp_t, gt_t
