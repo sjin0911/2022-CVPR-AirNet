@@ -54,7 +54,7 @@ class RestoreFinetuneDataset(Dataset):
             gt_files = load_list(gt_txt)
             in_files = load_list(notgt_txt)
 
-            half = len(in_files)//2
+            half = len(in_files)//4
             in_files = in_files[:half]
 
             gt_dir = self.root / task / split / "gt"
