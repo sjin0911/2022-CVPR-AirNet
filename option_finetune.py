@@ -26,7 +26,7 @@ parser.add_argument('--derain_dir', type=str, default='data/FineTune/Derain/', h
 parser.add_argument('--dehaze_dir', type=str, default='data/FineTune/Dehaze/', help='dehazing dataset path')
 parser.add_argument('--denoise_dir', type=str, default='data/FineTune/Denoise/', help='denoising dataset path')
 parser.add_argument('--output_path', type=str, default="output_finetune/", help='output save path')
-parser.add_argument('--ckpt_path', type=str, default="ckpt/", help='checkpoint save path')
+parser.add_argument('--ckpt_path', type=str, default="content/drive/MyDrive/miniproject1/AirNet/trained_model/", help='checkpoint save path')
 
 
 options = parser.parse_args()

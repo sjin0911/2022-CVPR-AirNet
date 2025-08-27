@@ -61,8 +61,6 @@ if __name__ == '__main__':
         }
     )
     tasks=["rain", "fog", "dust"]
-    base_dir="/content/local_data"
-
 
     torch.cuda.set_device(opt.cuda)
     os.makedirs(opt.ckpt_path, exist_ok=True)
@@ -100,16 +98,25 @@ if __name__ == '__main__':
 
     # ------------------ Model / Opt / Loss ------------------
     net = AirNet(opt).cuda()
-    ckpt_path = os.path.join(opt.ckpt_path, 'All.pth')
-    if os.path.isfile(ckpt_path):
-        net.load_state_dict(torch.load(ckpt_path, map_location=torch.device(opt.cuda)))
-
+    scaler = torch.cuda.amp.GradScaler(enabled=True)  
     optimizer = optim.Adam(net.parameters(), lr=opt.lr)
     CE = nn.CrossEntropyLoss().cuda()
     l1 = nn.L1Loss().cuda()
+    best_loss = float("inf")
 
-    
-    scaler = torch.cuda.amp.GradScaler(enabled=True)  # 안 만들어져 있으면 한 줄 추가
+    start_epoch = 0
+    ckpt_stat_path = os.path.join(opt.ckpt_path, 'ckpt_stat.pth')
+    if os.path.isfile(ckpt_stat_path):
+        ckpt = torch.load(ckpt_stat_path, map_location="cuda")
+        net.load_state_dict(ckpt["model"])
+        optimizer.load_state_dict(ckpt["optimizer"])
+        if ckpt["scaler"]: scaler.load_state_dict(ckpt["scaler"])
+        start_epoch = ckpt["epoch"] + 1
+        best_loss = ckpt["best_loss"]
+    else: 
+        ckpt_path = os.path.join(opt.ckpt_path, 'All.pth')
+        if os.path.isfile(ckpt_path):
+            net.load_state_dict(torch.load(ckpt_path, map_location=torch.device(opt.cuda)))
 
     amp_ctx = torch.cuda.amp.autocast()
 
@@ -118,7 +125,6 @@ if __name__ == '__main__':
 
     # ------------------ Train ------------------
     print('Start finetuning...')
-    best_loss = float("inf")
 
     
     for epoch in range(opt.epochs):
@@ -180,6 +186,16 @@ if __name__ == '__main__':
             best_loss = avg_loss
             ckpt_best = os.path.join(opt.ckpt_path, "best.pth")
             torch.save(net.state_dict(), ckpt_best)
+
+            ckpt_epoch = os.path.join(opt.ckpt_path, "ckpt_stat.pth")
+            ckpt = {
+                "epoch": epoch,
+                "model": net.state_dict(),
+                "optimizer": optimizer.state_dict(),
+                "scaler": scaler.state_dict() if scaler else None,  # AMP 쓰면
+                "best_loss": best_loss,
+            }
+            torch.save(ckpt, ckpt_epoch)
 
     # 마지막 저장 + 요약
     ckpt_final = os.path.join(opt.ckpt_path, "last.pth")
