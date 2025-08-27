@@ -114,7 +114,7 @@ if __name__ == '__main__':
         start_epoch = ckpt["epoch"] + 1
         best_loss = ckpt["best_loss"]
     else: 
-        ckpt_path = os.path.join(opt.ckpt_path, 'All.pth')
+        ckpt_path = os.path.join(opt.ckpt_path, 'best.pth')
         if os.path.isfile(ckpt_path):
             net.load_state_dict(torch.load(ckpt_path, map_location=torch.device(opt.cuda)))
 
