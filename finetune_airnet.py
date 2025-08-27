@@ -113,10 +113,9 @@ if __name__ == '__main__':
         if ckpt["scaler"]: scaler.load_state_dict(ckpt["scaler"])
         start_epoch = ckpt["epoch"] + 1
         best_loss = ckpt["best_loss"]
-    else: 
-        ckpt_path = os.path.join(opt.ckpt_path, 'best.pth')
-        if os.path.isfile(ckpt_path):
-            net.load_state_dict(torch.load(ckpt_path, map_location=torch.device(opt.cuda)))
+    ckpt_path = os.path.join(opt.ckpt_path, 'best.pth')
+    if os.path.isfile(ckpt_path):
+        net.load_state_dict(torch.load(ckpt_path, map_location=torch.device(opt.cuda)))
 
     amp_ctx = torch.cuda.amp.autocast()
 
@@ -151,17 +150,18 @@ if __name__ == '__main__':
             # -----------------------------
             # forward + loss
             # -----------------------------
-            if epoch < opt.epochs_encoder:
-                # encoder pre-train
-                _, output, target, _ = net.E(x_query=x1, x_key=x2)
-                loss = CE(output, target)
+            with amp_ctx:
+                if epoch < opt.epochs_encoder:
+                    # encoder pre-train
+                    _, output, target, _ = net.E(x_query=x1, x_key=x2)
+                    loss = CE(output, target)
 
-            else:
-                # restoration + contrastive
-                restored, output, target = net(x_query=x1, x_key=x2)
-                contrast_loss = CE(output, target)
-                l1_loss = l1(restored, y)
-                loss = l1_loss + 0.1 * contrast_loss
+                else:
+                    # restoration + contrastive
+                    restored, output, target = net(x_query=x1, x_key=x2)
+                    contrast_loss = CE(output, target)
+                    l1_loss = l1(restored, y)
+                    loss = l1_loss + 0.1 * contrast_loss
 
             scaler.scale(loss).backward()
             scaler.step(optimizer)
